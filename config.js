@@ -4,7 +4,7 @@
 // ╚══════════════════════════════════════════════════════════╝
 
 window.PB_CONFIG = {
-  whatsapp: "",
+  whatsapp: "55199999999",
   ownerUser: "",
   ownerPass: "",
 
