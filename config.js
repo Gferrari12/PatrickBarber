@@ -4,9 +4,9 @@
 // ╚══════════════════════════════════════════════════════════╝
 
 window.PB_CONFIG = {
-  whatsapp: "5519991029809",
-  ownerUser: "patrick",
-  ownerPass: "barber123",
+  whatsapp: "",
+  ownerUser: "",
+  ownerPass: "",
 
   firebase: {
     apiKey: "AIzaSyA6KDlC4zoX181z3GllZR01DmT8gzinLIo",
