@@ -296,7 +296,13 @@
 
   <div id="view-tickets" class="view">
     <div class="list-view">
-      <div class="section-header"><h2>Meus Tickets</h2><span>Gaste R$<span id="ticketMinLabel"></span>+ para ganhar</span></div>
+      <div class="section-header" style="flex-wrap:wrap;gap:.75rem">
+        <h2>Meus Tickets</h2>
+        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+          <span style="font-size:.72rem;color:var(--gray4)">Gaste R$<span id="ticketMinLabel"></span>+ para ganhar</span>
+          <button class="btn-sm" onclick="openShop()" style="border-color:var(--gray5);color:var(--gray6);white-space:nowrap">🎟 Comprar Tickets</button>
+        </div>
+      </div>
       <div id="ticketList"></div>
     </div>
   </div>
@@ -367,6 +373,51 @@
     <div class="prize-display" id="prizeDisplay"></div>
     <button class="btn-girar" id="btnGirar" onclick="spinWheel()">Girar</button>
     <button class="btn-fechar" onclick="closeRoulette()">Fechar</button>
+  </div>
+</div>
+
+<!-- ══ COMPRAR TICKETS ══ -->
+<div class="overlay" id="shopOverlay">
+  <div class="modal" style="max-width:400px">
+    <h2>COMPRAR TICKETS</h2>
+    <p>Escolha a quantidade e pague no caixa</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin:1.25rem 0">
+      <div class="shop-option" id="shop1" onclick="selectShopOption(1)" style="border:1px solid var(--border);padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all .2s">
+        <div>
+          <div style="font-weight:700;font-size:.9rem;letter-spacing:.5px">1 Ticket</div>
+          <div style="font-size:.72rem;color:var(--gray4);margin-top:2px">1 giro na roleta</div>
+        </div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:700">R$ 3,50</div>
+      </div>
+      <div class="shop-option" id="shop2" onclick="selectShopOption(2)" style="border:1px solid var(--border);padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all .2s">
+        <div>
+          <div style="font-weight:700;font-size:.9rem;letter-spacing:.5px">2 Tickets <span style="font-size:.65rem;background:var(--gray3);padding:2px 7px;margin-left:6px;letter-spacing:1px">PROMOÇÃO</span></div>
+          <div style="font-size:.72rem;color:var(--gray4);margin-top:2px">2 giros na roleta</div>
+        </div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:700">R$ 5,00</div>
+      </div>
+      <div style="border:1px solid var(--border);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div>
+          <div style="font-weight:700;font-size:.9rem;letter-spacing:.5px">Quantidade personalizada</div>
+          <div style="font-size:.72rem;color:var(--gray4);margin-top:2px">R$ 3,50 cada</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="shopQtyChange(-1)" style="width:28px;height:28px;border:1px solid var(--border);background:var(--black);color:var(--cream);cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center">−</button>
+          <span id="shopQtyVal" style="font-family:'Cormorant Garamond',serif;font-size:1.2rem;font-weight:700;min-width:20px;text-align:center">1</span>
+          <button onclick="shopQtyChange(1)" style="width:28px;height:28px;border:1px solid var(--border);background:var(--black);color:var(--cream);cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center">+</button>
+        </div>
+      </div>
+    </div>
+    <div style="background:var(--gray2);border:1px solid var(--border);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <span style="font-size:.72rem;font-weight:700;color:var(--gray4);text-transform:uppercase;letter-spacing:2px">Total a pagar</span>
+      <span id="shopTotal" style="font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:700">R$ 3,50</span>
+    </div>
+    <div style="margin-bottom:.75rem">
+      <div style="font-size:.62rem;font-weight:700;color:var(--gray4);text-transform:uppercase;letter-spacing:2px;margin-bottom:5px">Nome (para vincular os tickets)</div>
+      <input type="text" id="shopName" placeholder="Seu nome" style="width:100%;padding:9px 12px;border:1px solid var(--border);background:var(--black);color:var(--cream);font-family:'Syne',sans-serif;font-size:.85rem;outline:none" />
+    </div>
+    <button class="btn-girar" onclick="confirmShop()" style="margin-bottom:.6rem">Confirmar Compra</button>
+    <button class="btn-fechar" onclick="closeShop()">Fechar</button>
   </div>
 </div>
 
@@ -760,44 +811,193 @@ async function executeCancel(){
 }
 
 // ═══════════════════════════════════════
-//  ROLETA
+//  ROLETA — lógica corrigida
+//  A roda gira como um disco: rot é o
+//  ângulo total acumulado do disco.
+//  O ponteiro fica fixo no TOPO (−π/2).
+//  Setor i ocupa [i*arc, (i+1)*arc] no
+//  referencial do disco em rot=0.
+//  Quando o disco está em rotação `rot`,
+//  o ponteiro aponta para o ângulo
+//  (−rot) no referencial do disco, então
+//  o setor vencedor é floor((−rot mod 2π) / arc).
 // ═══════════════════════════════════════
 const WCOLS=['#2A2A2A','#1C1C1C','#141414','#222222','#181818','#333333','#111111','#2E2E2E'];
+const TAU = 2*Math.PI;
+
 function drawWheel(rot){
   const cv=document.getElementById('roulette'),ctx=cv.getContext('2d');
-  const cx=126,cy=126,r=122,arc=(2*Math.PI)/PRIZES.length;
+  const cx=126,cy=126,r=122,n=PRIZES.length,arc=TAU/n;
   ctx.clearRect(0,0,252,252);
   PRIZES.forEach((p,i)=>{
-    const s=rot+i*arc-Math.PI/2,e=s+arc;
+    // Setor i: de rot + i*arc − π/2  até  rot + (i+1)*arc − π/2
+    const s = rot + i*arc - Math.PI/2;
+    const e = s + arc;
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,s,e);ctx.closePath();
-    ctx.fillStyle=WCOLS[i%WCOLS.length];ctx.fill();ctx.strokeStyle='#0D0D0D';ctx.lineWidth=2;ctx.stroke();
-    ctx.save();ctx.translate(cx,cy);ctx.rotate(s+arc/2);ctx.textAlign='right';
+    ctx.fillStyle=WCOLS[i%WCOLS.length];ctx.fill();
+    ctx.strokeStyle='#0D0D0D';ctx.lineWidth=2;ctx.stroke();
+    // Texto no meio do setor
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(s+arc/2);
+    ctx.textAlign='right';
     ctx.fillStyle=p.prob>=0.4?'#6B6B6B':'#C8C4BC';
     ctx.font=`600 ${p.label.length>10?'9':'10'}px Syne,sans-serif`;
-    ctx.fillText(p.label,r-10,4);ctx.restore();
+    ctx.fillText(p.label,r-10,4);
+    ctx.restore();
   });
-  ctx.beginPath();ctx.arc(cx,cy,16,0,2*Math.PI);ctx.fillStyle='#0D0D0D';ctx.fill();ctx.strokeStyle='#3D3D3D';ctx.lineWidth=1.5;ctx.stroke();
+  // Centro
+  ctx.beginPath();ctx.arc(cx,cy,16,0,TAU);
+  ctx.fillStyle='#0D0D0D';ctx.fill();
+  ctx.strokeStyle='#3D3D3D';ctx.lineWidth=1.5;ctx.stroke();
 }
-function openRoulette(id){currentTicketId=id;angle=0;spinning=false;document.getElementById('btnGirar').disabled=false;document.getElementById('btnGirar').textContent='Girar';document.getElementById('prizeDisplay').classList.remove('show');drawWheel(0);document.getElementById('rouletteOverlay').classList.add('open');}
-function closeRoulette(){if(spinning)return;cancelAnimationFrame(animFrame);document.getElementById('rouletteOverlay').classList.remove('open');currentTicketId=null;}
+
+// Dado o ângulo final do disco, retorna qual índice de prêmio está sob o ponteiro
+function prizeIndexFromAngle(rot){
+  const n=PRIZES.length, arc=TAU/n;
+  // O ponteiro está no topo = −π/2 no canvas.
+  // No referencial do disco (removendo rot), o ponteiro aponta para (−rot − (−π/2)) = π/2 − rot
+  // Normalizamos para [0, TAU)
+  let ptr = (Math.PI/2 - rot) % TAU;
+  if(ptr < 0) ptr += TAU;
+  return Math.floor(ptr / arc) % n;
+}
+
+function openRoulette(id){
+  currentTicketId=id;
+  // Resetamos para rot=0 a cada abertura — sem acúmulo de giros anteriores
+  angle=0;
+  spinning=false;
+  document.getElementById('btnGirar').disabled=false;
+  document.getElementById('btnGirar').textContent='Girar';
+  document.getElementById('prizeDisplay').classList.remove('show');
+  drawWheel(0);
+  document.getElementById('rouletteOverlay').classList.add('open');
+}
+
+function closeRoulette(){
+  if(spinning)return;
+  cancelAnimationFrame(animFrame);
+  document.getElementById('rouletteOverlay').classList.remove('open');
+  currentTicketId=null;
+}
+
 function spinWheel(){
-  if(spinning)return;spinning=true;document.getElementById('btnGirar').disabled=true;document.getElementById('prizeDisplay').classList.remove('show');
-  const rand=Math.random();let pi=PRIZES.length-1;
+  if(spinning)return;
+  spinning=true;
+  document.getElementById('btnGirar').disabled=true;
+  document.getElementById('prizeDisplay').classList.remove('show');
+
+  const n=PRIZES.length, arc=TAU/n;
+
+  // 1. Sorteia o prêmio
+  const rand=Math.random();
+  let pi=n-1;
   for(let i=0;i<CUMULATIVE.length;i++){if(rand<=CUMULATIVE[i]){pi=i;break;}}
-  const arc=(2*Math.PI)/PRIZES.length;
-  const final=-(pi*arc)-arc/2+Math.PI/2-(4+Math.floor(Math.random()*4))*2*Math.PI;
-  const dur=4000,st=performance.now(),sa=angle;
+
+  // 2. Calcula o ângulo final DETERMINÍSTICO para que o setor pi fique sob o ponteiro.
+  //    Queremos que o centro do setor pi esteja no topo (ponteiro).
+  //    Centro do setor pi no referencial do disco = (pi + 0.5) * arc
+  //    O ponteiro aponta para π/2 − rot no disco  ⇒  rot = π/2 − centro_setor
+  //    Adiciona voltas inteiras para dar a sensação de giro.
+  const centerOfSector = (pi + 0.5) * arc;
+  const baseAngle = Math.PI/2 - centerOfSector;
+  // Normaliza para que baseAngle fique em [0, TAU) e adiciona voltas extras
+  let normalizedBase = baseAngle % TAU;
+  if(normalizedBase < 0) normalizedBase += TAU;
+  const extraSpins = (5 + Math.floor(Math.random()*4)) * TAU; // 5–8 voltas
+  const finalAngle = normalizedBase + extraSpins;
+
+  const dur=4500, st=performance.now(), startAngle=angle;
   const ease=t=>t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;
+
   const step=now=>{
-    const prog=Math.min((now-st)/dur,1);angle=sa+(final-sa)*ease(prog);drawWheel(angle);
-    if(prog<1){animFrame=requestAnimationFrame(step);}
-    else{
-      spinning=false;const prize=PRIZES[pi];
-      document.getElementById('prizeDisplay').textContent=`✦ ${prize.label}`;document.getElementById('prizeDisplay').classList.add('show');
-      if(currentTicketId){const t=tickets.find(x=>x.id===currentTicketId);if(t){if(prize.label==='Outro Giro'){document.getElementById('btnGirar').disabled=false;document.getElementById('btnGirar').textContent='Usar Outro Giro';}else{t.used=true;t.prize=prize.label;renderTickets();}}}
+    const prog=Math.min((now-st)/dur,1);
+    angle = startAngle + (finalAngle - startAngle)*ease(prog);
+    drawWheel(angle);
+    if(prog<1){
+      animFrame=requestAnimationFrame(step);
+    } else {
+      // Garante que o ângulo final seja exato
+      angle = finalAngle;
+      drawWheel(angle);
+      spinning=false;
+
+      // Verifica qual setor está sob o ponteiro (deve ser pi)
+      const landedIndex = prizeIndexFromAngle(angle);
+      const prize = PRIZES[landedIndex];
+
+      document.getElementById('prizeDisplay').textContent=`✦ ${prize.label}`;
+      document.getElementById('prizeDisplay').classList.add('show');
+
+      if(currentTicketId){
+        const t=tickets.find(x=>x.id===currentTicketId);
+        if(t){
+          if(prize.label==='Outro Giro'){
+            // Reseta para novo giro sem fechar
+            angle=0;
+            drawWheel(0);
+            document.getElementById('btnGirar').disabled=false;
+            document.getElementById('btnGirar').textContent='Usar Outro Giro';
+          } else {
+            t.used=true;t.prize=prize.label;renderTickets();
+          }
+        }
+      }
     }
   };
   animFrame=requestAnimationFrame(step);
+}
+
+// ═══════════════════════════════════════
+//  LOJA DE TICKETS
+// ═══════════════════════════════════════
+let shopMode=0; // 0=personalizado, 1=pacote1, 2=pacote2
+let shopQty=1;
+
+const SHOP_PRICES={1:{qty:1,price:3.50},2:{qty:2,price:5.00}};
+
+function openShop(){
+  shopMode=0; shopQty=1;
+  document.getElementById('shopQtyVal').textContent='1';
+  document.getElementById('shopTotal').textContent='R$ 3,50';
+  document.getElementById('shopName').value='';
+  document.querySelectorAll('.shop-option').forEach(el=>el.style.borderColor='var(--border)');
+  document.getElementById('shopOverlay').classList.add('open');
+}
+function closeShop(){document.getElementById('shopOverlay').classList.remove('open');}
+
+function selectShopOption(pkg){
+  shopMode=pkg;
+  const p=SHOP_PRICES[pkg];
+  shopQty=p.qty;
+  document.getElementById('shopQtyVal').textContent=p.qty;
+  document.getElementById('shopTotal').textContent=`R$ ${p.price.toFixed(2).replace('.',',')}`;
+  document.querySelectorAll('.shop-option').forEach(el=>el.style.borderColor='var(--border)');
+  document.getElementById('shop'+pkg).style.borderColor='var(--cream)';
+}
+
+function shopQtyChange(delta){
+  shopMode=0;
+  document.querySelectorAll('.shop-option').forEach(el=>el.style.borderColor='var(--border)');
+  shopQty=Math.max(1,Math.min(20,shopQty+delta));
+  document.getElementById('shopQtyVal').textContent=shopQty;
+  document.getElementById('shopTotal').textContent=`R$ ${(shopQty*3.5).toFixed(2).replace('.',',')}`;
+}
+
+function confirmShop(){
+  const name=document.getElementById('shopName').value.trim();
+  if(!name){showToast('Informe seu nome.');return;}
+  let qty=shopQty, price;
+  if(shopMode===1){qty=1;price='R$ 3,50';}
+  else if(shopMode===2){qty=2;price='R$ 5,00';}
+  else{price=`R$ ${(qty*3.5).toFixed(2).replace('.',',')}`;}
+
+  // Cria os tickets localmente
+  for(let i=0;i<qty;i++){
+    tickets.push({id:`shop_${Date.now()}_${i}`,name,slot:'Comprado',date:'',total:0,used:false});
+  }
+  renderTickets();
+  closeShop();
+  showToast(`✅ ${qty} ticket${qty>1?'s':''} adicionado${qty>1?'s':''}! Pague ${price} no caixa.`);
 }
 
 // ═══════════════════════════════════════
