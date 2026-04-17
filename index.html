@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -338,6 +339,7 @@
     <div class="otab active" onclick="switchOwnerTab('dashboard')">Dashboard</div>
     <div class="otab" onclick="switchOwnerTab('atendimentos')">Atendimentos</div>
     <div class="otab" onclick="switchOwnerTab('cancelamentos')">Cancelamentos</div>
+    <div class="otab" onclick="switchOwnerTab('premios')">Prêmios Ganhos</div>
   </div>
   <div id="oview-dashboard" class="oview active">
     <div class="kpi-grid" id="kpiGrid"></div>
@@ -361,6 +363,23 @@
     <div class="owner-table-wrap">
       <div class="owner-table-header"><span>Histórico de Cancelamentos</span></div>
       <table class="owner-table"><thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Serviços</th><th>Valor</th><th>Cancelado às</th></tr></thead><tbody id="cancelBody"></tbody></table>
+    </div>
+  </div>
+  <div id="oview-premios" class="oview">
+    <div class="owner-table-wrap">
+      <div class="owner-table-header"><span>Histórico de Prêmios Ganhos</span><span id="prizeCount" style="font-size:.65rem;color:var(--gray4)"></span></div>
+      <table class="owner-table">
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Cliente</th>
+            <th>Prêmio</th>
+            <th>Status</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody id="prizeBody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -719,10 +738,39 @@ function doLogout(){showPage('page-login');}
 //  PAINEL DONO
 // ═══════════════════════════════════════
 function switchOwnerTab(tab){
-  ['dashboard','atendimentos','cancelamentos'].forEach((id,i)=>{const a=id===tab;document.querySelectorAll('.otab')[i].classList.toggle('active',a);document.getElementById('oview-'+id).classList.toggle('active',a);});
+  ['dashboard','atendimentos','cancelamentos','premios'].forEach((id,i)=>{
+    const a=id===tab;
+    const tabEl = document.querySelectorAll('.otab')[i];
+    if(tabEl) tabEl.classList.toggle('active',a);
+    const viewEl = document.getElementById('oview-'+id);
+    if(viewEl) viewEl.classList.toggle('active',a);
+  });
   refreshOwner();
 }
-function refreshOwner(){renderDashboard();renderAtendimentos();renderCancelamentos();}
+function refreshOwner(){renderDashboard();renderAtendimentos();renderCancelamentos();renderPremios();}
+
+function renderPremios(){
+  const used = tickets.filter(t=>t.used).sort((a,b)=>bKey(a.date,a.slot).localeCompare(bKey(b.date,b.slot)));
+  document.getElementById('prizeCount').textContent=`${used.length} prêmio${used.length!==1?'s':''} utilizado${used.length!==1?'s':''}`;
+  document.getElementById('prizeBody').innerHTML=used.length?used.map(t=>`<tr>
+    <td style="font-size:.78rem;color:var(--gray5)">${t.date?isoLabel(t.date):''} ${t.slot}</td>
+    <td><strong>${t.name}</strong></td>
+    <td><span style="color:var(--cream);font-weight:700">${t.prize||'—'}</span></td>
+    <td><span class="status-badge done">UTILIZADO</span></td>
+    <td><button class="btn-cancel-appt" onclick="resetTicket('${t.id}')" style="background:var(--gray2);color:var(--gray5);border-color:var(--gray3)">Resetar</button></td>
+  </tr>`).join(''):`<tr><td colspan="5" style="text-align:center;color:var(--gray4);padding:2rem;font-size:.8rem">Nenhum prêmio utilizado ainda</td></tr>`;
+}
+
+async function resetTicket(id){
+  const t=tickets.find(x=>x.id===id);
+  if(!t)return;
+  if(!confirm(`Deseja resetar o ticket de ${t.name}? Ele poderá girar a roleta novamente.`)) return;
+  t.used=false;
+  delete t.prize;
+  renderTickets();
+  renderPremios();
+  showToast('Ticket resetado com sucesso.');
+}
 
 function renderDashboard(){
   const today=toISO(new Date());
@@ -898,16 +946,17 @@ function spinWheel(){
 
   // 2. Calcula o ângulo final DETERMINÍSTICO para que o setor pi fique sob o ponteiro.
   //    O ponteiro está no topo (-PI/2).
-  //    No canvas, o setor i começa em (i * arc) e termina em ((i+1) * arc).
-  //    Para o setor pi estar no topo, a rotação 'rot' deve satisfazer:
-  //    rot + (pi + 0.5) * arc = -PI/2  (considerando o centro do setor)
-  //    rot = -PI/2 - (pi + 0.5) * arc
+  //    O setor i no canvas é desenhado de (rot + i*arc - PI/2) até (rot + (i+1)*arc - PI/2).
+  //    Para o centro do setor pi estar no topo (-PI/2):
+  //    (finalAngle + pi*arc + arc/2 - PI/2) = -PI/2
+  //    finalAngle + pi*arc + arc/2 = 0
+  //    finalAngle = -(pi + 0.5) * arc
   const centerOfSector = (pi + 0.5) * arc;
-  const baseAngle = -Math.PI/2 - centerOfSector;
+  const baseAngle = -centerOfSector;
   
-  // Adiciona voltas extras para a animação (sentido anti-horário para compensar o sinal negativo)
-  const extraSpins = (5 + Math.floor(Math.random()*4)) * TAU;
-  const finalAngle = baseAngle - extraSpins;
+  // Adiciona voltas extras (sentido horário para ser mais natural)
+  const extraSpins = (8 + Math.floor(Math.random()*5)) * TAU;
+  const finalAngle = baseAngle + extraSpins;
 
   const dur=4500, st=performance.now(), startAngle=angle;
   const ease=t=>t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;
@@ -940,7 +989,7 @@ document.getElementById('prizeDisplay').classList.add('show');
             document.getElementById('btnGirar').disabled=false;
             document.getElementById('btnGirar').textContent='Usar Outro Giro';
           } else {
-            t.used=true;t.prize=prize.label;renderTickets();
+            t.used=true;t.prize=prize.label;renderTickets();renderPremios();
           }
         }
       }
