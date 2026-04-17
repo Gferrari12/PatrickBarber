@@ -754,11 +754,17 @@ function refreshOwner(){
 }
 
 function renderPremios(){
-  const used = tickets.filter(t=>t.used).sort((a,b)=>bKey(a.date,a.slot).localeCompare(bKey(b.date,b.slot)));
+  // Ordena por data e hora decrescente (mais recentes primeiro)
+  const used = tickets.filter(t=>t.used).sort((a,b)=>{
+    const keyA = (a.date || '') + (a.slot || '');
+    const keyB = (b.date || '') + (b.slot || '');
+    return keyB.localeCompare(keyA);
+  });
+  
   document.getElementById('prizeCount').textContent=`${used.length} prêmio${used.length!==1?'s':''} utilizado${used.length!==1?'s':''}`;
   document.getElementById('prizeBody').innerHTML=used.length?used.map(t=>`<tr>
-    <td style="font-size:.78rem;color:var(--gray5)">${t.date?isoLabel(t.date):''} ${t.slot}</td>
-    <td><strong>${t.name}</strong></td>
+    <td style="font-size:.78rem;color:var(--gray5)">${t.date?isoLabel(t.date):'Hoje'} ${t.slot}</td>
+    <td><strong>${t.name}</strong> ${t.isShop ? '<small style="color:var(--gray4);display:block">Ticket Comprado</small>' : '<small style="color:var(--gray4);display:block">Agendamento</small>'}</td>
     <td><span style="color:var(--cream);font-weight:700">${t.prize||'—'}</span></td>
     <td><span class="status-badge done">UTILIZADO</span></td>
     <td><button class="btn-cancel-appt" onclick="resetTicket('${t.id}')" style="background:var(--gray2);color:var(--gray5);border-color:var(--gray3)">Resetar</button></td>
@@ -1045,8 +1051,11 @@ function confirmShop(){
   else{price=`R$ ${(qty*3.5).toFixed(2).replace('.',',')}`;}
 
   // Cria os tickets localmente
+  const now = new Date();
+  const today = toISO(now);
+  const hm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   for(let i=0;i<qty;i++){
-    tickets.push({id:`shop_${Date.now()}_${i}`,name,slot:'Comprado',date:'',total:0,used:false});
+    tickets.push({id:`shop_${Date.now()}_${i}`,name,slot:hm,date:today,total:0,used:false,isShop:true});
   }
   renderTickets();
   closeShop();
