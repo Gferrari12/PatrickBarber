@@ -505,6 +505,7 @@ let spinning=false, angle=0, animFrame;
 // ═══════════════════════════════════════
 function initFirebase(){
   setSyncDot('saving');
+  // Agendamentos
   window._onSnapshot(window._col(window._db,'agendamentos'),snap=>{
     bookings={};
     snap.forEach(d=>{bookings[d.id]=d.data();});
@@ -512,15 +513,53 @@ function initFirebase(){
     renderCalendar();
     if(selectedDate) renderTimeSlots(selectedDate);
     renderAppointments();
+    updateTicketsFromData();
     if(document.getElementById('page-owner').classList.contains('active')) refreshOwner();
   },()=>setSyncDot('err'));
 
+  // Cancelamentos
   window._onSnapshot(window._col(window._db,'cancelamentos'),snap=>{
     cancelsList=[];
     snap.forEach(d=>cancelsList.push(d.data()));
     cancelsList.sort((a,b)=>b.cancelledAt>a.cancelledAt?1:-1);
     if(document.getElementById('page-owner').classList.contains('active')) refreshOwner();
   });
+
+  // Tickets Avulsos (Comprados)
+  window._onSnapshot(window._col(window._db,'tickets_avulsos'),snap=>{
+    window.ticketsAvulsos = [];
+    snap.forEach(d=>{
+      const data = d.data();
+      data.id = d.id;
+      window.ticketsAvulsos.push(data);
+    });
+    updateTicketsFromData();
+    if(document.getElementById('page-owner').classList.contains('active')) refreshOwner();
+  });
+}
+
+function updateTicketsFromData(){
+  // Combina tickets de agendamentos com tickets avulsos
+  const agendamentoTickets = Object.entries(bookings)
+    .filter(([key, data]) => data.total >= TICKET_MIN)
+    .map(([key, data]) => ({
+      id: key,
+      name: data.name,
+      date: data.date,
+      slot: data.slot,
+      total: data.total,
+      used: !!data.used,
+      prize: data.prize || null,
+      isShop: false
+    }));
+
+  const avulsos = (window.ticketsAvulsos || []).map(t => ({
+    ...t,
+    isShop: true
+  }));
+
+  tickets = [...agendamentoTickets, ...avulsos];
+  renderTickets();
 }
 function setSyncDot(s){const d=document.getElementById('syncDot');if(d)d.className=s;}
 window.addEventListener('fbready',initFirebase);
@@ -775,11 +814,22 @@ async function resetTicket(id){
   const t=tickets.find(x=>x.id===id);
   if(!t)return;
   if(!confirm(`Deseja resetar o ticket de ${t.name}? Ele poderá girar a roleta novamente.`)) return;
-  t.used=false;
-  delete t.prize;
-  renderTickets();
-  renderPremios();
-  showToast('Ticket resetado com sucesso.');
+  
+  setSyncDot('saving');
+  try {
+    const collectionName = t.isShop ? 'tickets_avulsos' : 'agendamentos';
+    const docRef = window._doc(window._db, collectionName, id);
+    
+    // No Firestore, usamos deleteField ou apenas setamos para null/false
+    // Para manter compatibilidade com o resto do código, vamos setar used: false e prize: null
+    await window._setDoc(docRef, { used: false, prize: null }, { merge: true });
+    
+    showToast('Ticket resetado com sucesso.');
+    setSyncDot('ok');
+  } catch (e) {
+    console.error(e);
+    showToast('Erro ao resetar ticket no banco de dados.');
+  }
 }
 
 function renderDashboard(){
@@ -997,7 +1047,20 @@ function spinWheel(){
             document.getElementById('btnGirar').disabled=false;
             document.getElementById('btnGirar').textContent='Usar Outro Giro';
           } else {
-            t.used=true;t.prize=prize.label;renderTickets();renderPremios();
+            // Salva o prêmio no Firebase
+            setSyncDot('saving');
+            const collectionName = t.isShop ? 'tickets_avulsos' : 'agendamentos';
+            const docRef = window._doc(window._db, collectionName, currentTicketId);
+            
+            window._setDoc(docRef, { used: true, prize: prize.label }, { merge: true })
+              .then(() => {
+                setSyncDot('ok');
+                showToast('Prêmio salvo com sucesso!');
+              })
+              .catch(err => {
+                console.error(err);
+                showToast('Erro ao salvar prêmio no banco de dados.');
+              });
           }
         }
       }
@@ -1042,7 +1105,7 @@ function shopQtyChange(delta){
   document.getElementById('shopTotal').textContent=`R$ ${(shopQty*3.5).toFixed(2).replace('.',',')}`;
 }
 
-function confirmShop(){
+async function confirmShop(){
   const name=document.getElementById('shopName').value.trim();
   if(!name){showToast('Informe seu nome.');return;}
   let qty=shopQty, price;
@@ -1050,19 +1113,34 @@ function confirmShop(){
   else if(shopMode===2){qty=2;price='R$ 5,00';}
   else{price=`R$ ${(qty*3.5).toFixed(2).replace('.',',')}`;}
 
-  // Cria os tickets localmente
-  const now = new Date();
-  const today = toISO(now);
-  const hm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  for(let i=0;i<qty;i++){
-    tickets.push({id:`shop_${Date.now()}_${i}`,name,slot:hm,date:today,total:0,used:false,isShop:true});
+  setSyncDot('saving');
+  try {
+    const now = new Date();
+    const today = toISO(now);
+    const hm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    
+    for(let i=0;i<qty;i++){
+      const ticketId = `shop_${Date.now()}_${i}`;
+      const ticketData = {
+        name,
+        slot: hm,
+        date: today,
+        total: 0,
+        used: false,
+        isShop: true,
+        createdAt: Date.now()
+      };
+      await window._setDoc(window._doc(window._db, 'tickets_avulsos', ticketId), ticketData);
+    }
+    
+    closeShop();
+    showToast(`✅ ${qty} ticket${qty>1?'s':''} adicionado${qty>1?'s':''}! Pague ${price} no caixa.`);
+  } catch (e) {
+    console.error(e);
+    showToast('Erro ao salvar tickets no Firebase.');
   }
-  renderTickets();
-  closeShop();
-  showToast(`✅ ${qty} ticket${qty>1?'s':''} adicionado${qty>1?'s':''}! Pague ${price} no caixa.`);
-}
-
-// ═══════════════════════════════════════
+  setSyncDot('ok');
+}══════════════════════════════════════
 //  TOAST
 // ═══════════════════════════════════════
 let toastTimer;
