@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -747,7 +746,12 @@ function switchOwnerTab(tab){
   });
   refreshOwner();
 }
-function refreshOwner(){renderDashboard();renderAtendimentos();renderCancelamentos();renderPremios();}
+function refreshOwner(){
+  renderDashboard();
+  renderAtendimentos();
+  renderCancelamentos();
+  renderPremios();
+}
 
 function renderPremios(){
   const used = tickets.filter(t=>t.used).sort((a,b)=>bKey(a.date,a.slot).localeCompare(bKey(b.date,b.slot)));
@@ -877,22 +881,29 @@ function drawWheel(rot){
   const cv=document.getElementById('roulette'),ctx=cv.getContext('2d');
   const cx=126,cy=126,r=122,n=PRIZES.length,arc=TAU/n;
   ctx.clearRect(0,0,252,252);
+  
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(rot);
+  
   PRIZES.forEach((p,i)=>{
-    // Setor i: de rot + i*arc − π/2  até  rot + (i+1)*arc − π/2
-    const s = rot + i*arc - Math.PI/2;
+    const s = i*arc - Math.PI/2;
     const e = s + arc;
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,s,e);ctx.closePath();
+    ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,r,s,e);ctx.closePath();
     ctx.fillStyle=WCOLS[i%WCOLS.length];ctx.fill();
     ctx.strokeStyle='#0D0D0D';ctx.lineWidth=2;ctx.stroke();
-    // Texto no meio do setor
-    ctx.save();ctx.translate(cx,cy);ctx.rotate(s+arc/2);
+    
+    ctx.save();
+    ctx.rotate(s+arc/2);
     ctx.textAlign='right';
     ctx.fillStyle=p.prob>=0.4?'#6B6B6B':'#C8C4BC';
     ctx.font=`600 ${p.label.length>10?'9':'10'}px Syne,sans-serif`;
     ctx.fillText(p.label,r-10,4);
     ctx.restore();
   });
-  // Centro
+  ctx.restore();
+
+  // Centro fixo
   ctx.beginPath();ctx.arc(cx,cy,16,0,TAU);
   ctx.fillStyle='#0D0D0D';ctx.fill();
   ctx.strokeStyle='#3D3D3D';ctx.lineWidth=1.5;ctx.stroke();
@@ -941,25 +952,20 @@ function spinWheel(){
 
   // 1. Sorteia o prêmio
   const rand=Math.random();
-  let pi=n-1;
+  let pi=0;
   for(let i=0;i<CUMULATIVE.length;i++){if(rand<=CUMULATIVE[i]){pi=i;break;}}
 
-  // 2. Calcula o ângulo final DETERMINÍSTICO para que o setor pi fique sob o ponteiro.
-  //    O ponteiro está no topo (-PI/2).
-  //    O setor i no canvas é desenhado de (rot + i*arc - PI/2) até (rot + (i+1)*arc - PI/2).
-  //    Para o centro do setor pi estar no topo (-PI/2):
-  //    (finalAngle + pi*arc + arc/2 - PI/2) = -PI/2
-  //    finalAngle + pi*arc + arc/2 = 0
-  //    finalAngle = -(pi + 0.5) * arc
-  const centerOfSector = (pi + 0.5) * arc;
-  const baseAngle = -centerOfSector;
-  
-  // Adiciona voltas extras (sentido horário para ser mais natural)
-  const extraSpins = (8 + Math.floor(Math.random()*5)) * TAU;
-  const finalAngle = baseAngle + extraSpins;
+  // 2. Calcula o ângulo final para que o setor pi pare no topo (0 radianos no disco rotacionado)
+  // O ponteiro está fixo no topo. O disco gira 'angle'.
+  // Setor i está em [i*arc, (i+1)*arc].
+  // Para o setor pi estar no topo: angle + (pi + 0.5)*arc = 0 (ou múltiplo de 2PI)
+  // Portanto: angle = -(pi + 0.5)*arc
+  const targetAngle = -(pi + 0.5) * arc;
+  const extraSpins = (10 + Math.floor(Math.random()*5)) * TAU;
+  const finalAngle = targetAngle - extraSpins; // Gira no sentido anti-horário para acumular ângulo negativo
 
-  const dur=4500, st=performance.now(), startAngle=angle;
-  const ease=t=>t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;
+  const dur=5000, st=performance.now(), startAngle=angle % TAU;
+  const ease = t => 1 - Math.pow(1 - t, 4); // Ease out quart para suavidade
 
   const step=now=>{
     const prog=Math.min((now-st)/dur,1);
@@ -968,22 +974,18 @@ function spinWheel(){
     if(prog<1){
       animFrame=requestAnimationFrame(step);
     } else {
-      // Garante que o ângulo final seja exato
       angle = finalAngle;
       drawWheel(angle);
       spinning=false;
 
-   // Verifica qual setor está sob o ponteiro (deve ser pi)
-const prize = PRIZES[pi];
-
-document.getElementById('prizeDisplay').textContent=`✦ ${prize.label}`;
-document.getElementById('prizeDisplay').classList.add('show');
+      const prize = PRIZES[pi];
+      document.getElementById('prizeDisplay').textContent=`✦ ${prize.label}`;
+      document.getElementById('prizeDisplay').classList.add('show');
 
       if(currentTicketId){
         const t=tickets.find(x=>x.id===currentTicketId);
         if(t){
           if(prize.label==='Outro Giro'){
-            // Reseta para novo giro sem fechar
             angle=0;
             drawWheel(0);
             document.getElementById('btnGirar').disabled=false;
