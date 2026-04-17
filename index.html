@@ -853,10 +853,13 @@ function drawWheel(rot){
 // Dado o ângulo final do disco, retorna qual índice de prêmio está sob o ponteiro
 function prizeIndexFromAngle(rot){
   const n=PRIZES.length, arc=TAU/n;
-  // O ponteiro está no topo = −π/2 no canvas.
-  // No referencial do disco (removendo rot), o ponteiro aponta para (−rot − (−π/2)) = π/2 − rot
-  // Normalizamos para [0, TAU)
-  let ptr = (Math.PI/2 - rot) % TAU;
+  // O ponteiro está no topo = -PI/2 no canvas.
+  // O setor i no canvas está em [rot + i*arc - PI/2, rot + (i+1)*arc - PI/2]
+  // Queremos saber qual i satisfaz: rot + i*arc - PI/2 <= -PI/2 <= rot + (i+1)*arc - PI/2
+  // Simplificando: rot + i*arc <= 0 <= rot + (i+1)*arc
+  // i*arc <= -rot <= (i+1)*arc
+  // i <= -rot/arc <= i+1
+  let ptr = (-rot) % TAU;
   if(ptr < 0) ptr += TAU;
   return Math.floor(ptr / arc) % n;
 }
@@ -894,17 +897,17 @@ function spinWheel(){
   for(let i=0;i<CUMULATIVE.length;i++){if(rand<=CUMULATIVE[i]){pi=i;break;}}
 
   // 2. Calcula o ângulo final DETERMINÍSTICO para que o setor pi fique sob o ponteiro.
-  //    Queremos que o centro do setor pi esteja no topo (ponteiro).
-  //    Centro do setor pi no referencial do disco = (pi + 0.5) * arc
-  //    O ponteiro aponta para π/2 − rot no disco  ⇒  rot = π/2 − centro_setor
-  //    Adiciona voltas inteiras para dar a sensação de giro.
+  //    O ponteiro está no topo (-PI/2).
+  //    No canvas, o setor i começa em (i * arc) e termina em ((i+1) * arc).
+  //    Para o setor pi estar no topo, a rotação 'rot' deve satisfazer:
+  //    rot + (pi + 0.5) * arc = -PI/2  (considerando o centro do setor)
+  //    rot = -PI/2 - (pi + 0.5) * arc
   const centerOfSector = (pi + 0.5) * arc;
-  const baseAngle = Math.PI/2 - centerOfSector;
-  // Normaliza para que baseAngle fique em [0, TAU) e adiciona voltas extras
-  let normalizedBase = baseAngle % TAU;
-  if(normalizedBase < 0) normalizedBase += TAU;
-  const extraSpins = (5 + Math.floor(Math.random()*4)) * TAU; // 5–8 voltas
-  const finalAngle = normalizedBase + extraSpins;
+  const baseAngle = -Math.PI/2 - centerOfSector;
+  
+  // Adiciona voltas extras para a animação (sentido anti-horário para compensar o sinal negativo)
+  const extraSpins = (5 + Math.floor(Math.random()*4)) * TAU;
+  const finalAngle = baseAngle - extraSpins;
 
   const dur=4500, st=performance.now(), startAngle=angle;
   const ease=t=>t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;
