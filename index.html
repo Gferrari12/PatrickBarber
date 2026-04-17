@@ -921,12 +921,11 @@ function spinWheel(){
       drawWheel(angle);
       spinning=false;
 
-      // Verifica qual setor está sob o ponteiro (deve ser pi)
-      const landedIndex = prizeIndexFromAngle(angle);
-      const prize = PRIZES[landedIndex];
+   // Verifica qual setor está sob o ponteiro (deve ser pi)
+const prize = PRIZES[pi];
 
-      document.getElementById('prizeDisplay').textContent=`✦ ${prize.label}`;
-      document.getElementById('prizeDisplay').classList.add('show');
+document.getElementById('prizeDisplay').textContent=`✦ ${prize.label}`;
+document.getElementById('prizeDisplay').classList.add('show');
 
       if(currentTicketId){
         const t=tickets.find(x=>x.id===currentTicketId);
