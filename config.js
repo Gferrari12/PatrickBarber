@@ -33,15 +33,5 @@ window.PB_CONFIG = {
     { nome: "Acabamento", preco: 15 },
     { nome: "Hidratação", preco: 25 },
     { nome: "Luzes", preco: 80 }
-  ],
-
-  ticketMinimo: 70,
-
-  premios: [
-    { label: "NADA", prob: 0.50 },
-    { label: "Barba Grátis", prob: 0.125 },
-    { label: "Cabelo Grátis", prob: 0.125 },
-    { label: "Outro Giro", prob: 0.125 },
-    { label: "Sobrancelha", prob: 0.125 }
   ]
 };
