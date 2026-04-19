@@ -5,8 +5,6 @@
 
 window.PB_CONFIG = {
   whatsapp: "55199999999",
-  ownerUser: "",
-  ownerPass: "",
 
   firebase: {
     apiKey: "AIzaSyA6KDlC4zoX181z3GllZR01DmT8gzinLIo",
