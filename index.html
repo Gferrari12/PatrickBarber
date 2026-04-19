@@ -142,7 +142,7 @@
     .bar-label{font-size:.58rem;color:var(--gray4);text-transform:uppercase}
 
     .table-wrap{background:var(--gray1);border:1px solid var(--border);overflow-x:auto}
-    table{width:100%;border-collapse:collapse;text-align:left}
+    <table>{width:100%;border-collapse:collapse;text-align:left}
     th{background:var(--gray2);padding:12px 1rem;font-size:.62rem;font-weight:700;color:var(--gray4);text-transform:uppercase;letter-spacing:2px;border-bottom:1px solid var(--border)}
     td{padding:12px 1rem;border-bottom:1px solid var(--border);font-size:.85rem}
     tr:last-child td{border-bottom:none}
@@ -241,27 +241,8 @@
           </div>
           <div class="form-group">
             <label>Serviços Desejados</label>
-            <div class="svc-list">
-              <div class="svc-item" onclick="toggleSvc(this)">
-                <label><input type="checkbox" class="svc-check" value="35" data-name="Cabelo" onchange="updateTotal()"> Cabelo</label>
-                <span class="price">R$ 35,00</span>
-              </div>
-              <div class="svc-item" onclick="toggleSvc(this)">
-                <label><input type="checkbox" class="svc-check" value="30" data-name="Barba" onchange="updateTotal()"> Barba</label>
-                <span class="price">R$ 30,00</span>
-              </div>
-              <div class="svc-item" onclick="toggleSvc(this)">
-                <label><input type="checkbox" class="svc-check" value="60" data-name="Combo (Cabelo + Barba)" onchange="updateTotal()"> Combo (Cabelo + Barba)</label>
-                <span class="price">R$ 60,00</span>
-              </div>
-              <div class="svc-item" onclick="toggleSvc(this)">
-                <label><input type="checkbox" class="svc-check" value="15" data-name="Sobrancelha" onchange="updateTotal()"> Sobrancelha</label>
-                <span class="price">R$ 15,00</span>
-              </div>
-              <div class="svc-item" onclick="toggleSvc(this)">
-                <label><input type="checkbox" class="svc-check" value="20" data-name="Acabamento / Pezinho" onchange="updateTotal()"> Acabamento / Pezinho</label>
-                <span class="price">R$ 20,00</span>
-              </div>
+            <div class="svc-list" id="svcList">
+              <!-- Renderizado via JS -->
             </div>
           </div>
           <div class="total-line">
@@ -408,9 +389,11 @@ let selectedDate = null;
 let selectedTime = null;
 let pendingCancelSlot = null;
 
+// Garante que o CFG seja lido do config.js
+const CFG = window.PB_CONFIG || { whatsapp: "", horarios: {}, servicos: [] };
 const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const DIAS_PT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-const WA = CFG.whatsapp.replace(/\D/g,'');
+const WA = (CFG.whatsapp || "").replace(/\D/g,'');
 
 // ══════════════════════════════════════
 //  FIREBASE & SYNC
@@ -440,12 +423,24 @@ function initFirebase(){
 
 function setSyncDot(s){const d=document.getElementById('syncDot');if(d)d.className=s;}
 function isOwnerPage(){return document.getElementById('page-owner').classList.contains('active');}
+
+// Inicialização robusta
+function startApp() {
+  initCal();
+  renderServices();
+  // Se o Firebase já estiver pronto, inicia a sincronização
+  if (window._db) {
+    initFirebase();
+  }
+}
+
 window.addEventListener('fbready',()=>{
   initFirebase();
   window._onAuth(user=>{
     currentUser=user;
     if(user){
-      document.getElementById('ownerEmail').textContent=user.email;
+      const el = document.getElementById('ownerEmail');
+      if(el) el.textContent=user.email;
     }
   });
 });
@@ -462,17 +457,27 @@ const bKey=(date,time)=>`${date}|${time}`;
 // ══════════════════════════════════════
 //  CALENDÁRIO
 // ══════════════════════════════════════
-function initCal(){const n=new Date();calYear=n.getFullYear();calMonth=n.getMonth();renderCalendar();}
+function initCal(){
+  const n=new Date();
+  calYear=n.getFullYear();
+  calMonth=n.getMonth();
+  renderCalendar();
+}
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
 
 function renderCalendar(){
-  document.getElementById('calMonthLabel').textContent=`${MESES_PT[calMonth]} ${calYear}`;
+  const label = document.getElementById('calMonthLabel');
+  if(!label) return;
+  label.textContent=`${MESES_PT[calMonth]} ${calYear}`;
+  
   const firstDOW=new Date(calYear,calMonth,1).getDay();
   const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
   const today=new Date();today.setHours(0,0,0,0);
+  
   let html=DIAS_PT.map(d=>`<div class="cal-dow">${d}</div>`).join('');
   for(let i=0;i<firstDOW;i++) html+=`<div class="cal-day"></div>`;
+  
   for(let d=1;d<=daysInMonth;d++){
     const date=new Date(calYear,calMonth,d);date.setHours(0,0,0,0);
     const dow=date.getDay(), iso=toISO(date);
@@ -480,6 +485,7 @@ function renderCalendar(){
     const isPast=date<today, isClosed=!horario, isSel=selectedDate===iso;
     const isToday=iso===toISO(today);
     const hasAppt=Object.keys(bookings).some(k=>k.startsWith(iso+'|'));
+    
     let cls='cal-day';
     if(isSel) cls+=' selected';
     else if(isPast) cls+=' past';
@@ -487,16 +493,19 @@ function renderCalendar(){
     else cls+=' available';
     if(isToday&&!isSel) cls+=' today';
     if(hasAppt) cls+=' has-appt';
+    
     const click=(isPast||isClosed)?'':`onclick="selectDate('${iso}')"`;
     html+=`<div class="${cls}" ${click} title="${isClosed?'Fechado':isPast?'Data passada':''}">${d}</div>`;
   }
-  document.getElementById('calGrid').innerHTML=html;
+  const grid = document.getElementById('calGrid');
+  if(grid) grid.innerHTML=html;
 }
 
 function selectDate(iso){selectedDate=iso;selectedTime=null;updateSelectedDisplay();renderCalendar();renderTimeSlots(iso);}
 
 function renderTimeSlots(iso){
   const sec=document.getElementById('timeSection');
+  if(!sec) return;
   const dow=isoDOW(iso), horario=CFG.horarios[dow];
   if(!horario){sec.innerHTML=`<div class="helper-msg">🚫 Fechado neste dia</div>`;return;}
   const slots=[];
@@ -516,6 +525,7 @@ function selectTime(t){
 
 function updateSelectedDisplay(){
   const el=document.getElementById('selectedDisplay');
+  if(!el) return;
   if(selectedDate&&selectedTime){
     el.className='selected-datetime';
     el.innerHTML=`<span class="sel-tag date">${isoLabel(selectedDate)}</span><span class="sel-tag time">${selectedTime}</span>`;
@@ -529,16 +539,29 @@ function updateSelectedDisplay(){
 }
 
 // ══════════════════════════════════════
-//  TOTAL
+//  SERVIÇOS & TOTAL
 // ══════════════════════════════════════
+function renderServices(){
+  const list = document.getElementById('svcList');
+  if(!list) return;
+  list.innerHTML = (CFG.servicos || []).map(s => `
+    <div class="svc-item" onclick="toggleSvc(this)">
+      <label><input type="checkbox" class="svc-check" value="${s.preco}" data-name="${s.nome}" onchange="updateTotal()"> ${s.nome}</label>
+      <span class="price">R$ ${s.preco},00</span>
+    </div>
+  `).join('');
+}
+
 function getTotal(){return Array.from(document.querySelectorAll('.svc-check:checked')).reduce((a,el)=>a+parseInt(el.value),0);}
 function updateTotal(){
   const t=getTotal();
-  document.getElementById('totalValue').textContent=`R$ ${t.toFixed(2).replace('.',',')}`;
+  const el = document.getElementById('totalValue');
+  if(el) el.textContent=`R$ ${t.toFixed(2).replace('.',',')}`;
 }
 
 function toggleSvc(item){
   const cb=item.querySelector('input');
+  if(!cb) return;
   cb.checked=!cb.checked;
   item.classList.toggle('checked',cb.checked);
   updateTotal();
@@ -585,6 +608,7 @@ async function confirmBooking(){
 // ══════════════════════════════════════
 function renderAppointments(){
   const list=document.getElementById('apptList');
+  if(!list) return;
   const search=(document.getElementById('apptSearchName').value||'').trim().toLowerCase();
   if(!search){
     list.innerHTML=`<div class="empty-state"><div class="icon">🔍</div><p>Digite seu nome acima<br>para ver seus agendamentos.</p></div>`;
@@ -611,8 +635,10 @@ function renderAppointments(){
 function switchTab(tab){
   ['booking','appointments'].forEach((id,i)=>{
     const a=id===tab;
-    document.querySelectorAll('.tab')[i].classList.toggle('active',a);
-    document.getElementById('view-'+id).classList.toggle('active',a);
+    const tabs = document.querySelectorAll('.tab');
+    if(tabs[i]) tabs[i].classList.toggle('active',a);
+    const view = document.getElementById('view-'+id);
+    if(view) view.classList.toggle('active',a);
   });
   if(tab==='appointments') renderAppointments();
 }
@@ -666,7 +692,8 @@ function renderDashboard(){
   const fat=todayE.reduce((a,e)=>a+e.total,0);
   const todayCan=cancelsList.filter(e=>e.date===today);
   const lostCancel=todayCan.reduce((a,e)=>a+e.total,0);
-  document.getElementById('kpiGrid').innerHTML=`
+  const kpi = document.getElementById('kpiGrid');
+  if(kpi) kpi.innerHTML=`
     <div class="kpi-card green"><div class="kpi-label">Faturamento Hoje</div><div class="kpi-value">R$ ${fat}</div><div class="kpi-sub">${todayE.length} atendimento${todayE.length!==1?'s':''}</div></div>
     <div class="kpi-card blue"><div class="kpi-label">Total na Agenda</div><div class="kpi-value">${all.length}</div><div class="kpi-sub">agendamentos no total</div></div>
     <div class="kpi-card red"><div class="kpi-label">Cancelamentos Hoje</div><div class="kpi-value">${todayCan.length}</div><div class="kpi-sub">R$ ${lostCancel} perdido</div></div>`;
@@ -676,10 +703,13 @@ function renderDashboard(){
   const byH=hours.map(hh=>{const s=String(hh).padStart(2,'0');const es=todayE.filter(e=>e.slot&&e.slot.startsWith(s+':'));return{hh,label:`${s}h`,val:es.reduce((a,e)=>a+e.total,0)};});
   const maxV=Math.max(...byH.map(b=>b.val),1);
   const nowH=new Date().getHours();
-  document.getElementById('barChart').innerHTML=byH.map(b=>`<div class="bar-wrap"><div class="bar-inner"><div class="bar-val">${b.val>0?'R$'+b.val:''}</div><div class="bar${b.hh===nowH?' current':''}" style="height:${Math.max((b.val/maxV)*100,b.val>0?8:2)}%"></div></div><div class="bar-label">${b.label}</div></div>`).join('');
+  const chart = document.getElementById('barChart');
+  if(chart) chart.innerHTML=byH.map(b=>`<div class="bar-wrap"><div class="bar-inner"><div class="bar-val">${b.val>0?'R$'+b.val:''}</div><div class="bar${b.hh===nowH?' current':''}" style="height:${Math.max((b.val/maxV)*100,b.val>0?8:2)}%"></div></div><div class="bar-label">${b.label}</div></div>`).join('');
   const upcoming=all.filter(e=>e.date>=today).slice(0,30);
-  document.getElementById('nextCount').textContent=`${upcoming.length} próximo${upcoming.length!==1?'s':''}`;
-  document.getElementById('nextBody').innerHTML=upcoming.length?upcoming.map(e=>`<tr>
+  const nextCount = document.getElementById('nextCount');
+  if(nextCount) nextCount.textContent=`${upcoming.length} próximo${upcoming.length!==1?'s':''}`;
+  const nextBody = document.getElementById('nextBody');
+  if(nextBody) nextBody.innerHTML=upcoming.length?upcoming.map(e=>`<tr>
     <td style="font-size:.78rem;color:var(--gray5)">${e.date?isoLabel(e.date):''}</td>
     <td><strong style="font-family:'Cormorant Garamond',serif;font-size:1rem">${e.slot}</strong></td>
     <td>${e.name}</td><td style="color:var(--gray4);font-size:.75rem">${e.services.join(', ')}</td>
@@ -689,8 +719,10 @@ function renderDashboard(){
 
 function renderAtendimentos(){
   const all=Object.values(bookings).sort((a,b)=>bKey(a.date,a.slot).localeCompare(bKey(b.date,b.slot)));
-  document.getElementById('atendCount').textContent=`${all.length} registro${all.length!==1?'s':''}`;
-  document.getElementById('atendBody').innerHTML=all.length?all.map(e=>{
+  const atendCount = document.getElementById('atendCount');
+  if(atendCount) atendCount.textContent=`${all.length} registro${all.length!==1?'s':''}`;
+  const atendBody = document.getElementById('atendBody');
+  if(atendBody) atendBody.innerHTML=all.length?all.map(e=>{
     return `<tr>
       <td style="font-size:.78rem;color:var(--gray5)">${e.date?isoLabel(e.date):''}</td>
       <td><strong style="font-family:'Cormorant Garamond',serif;font-size:1rem">${e.slot}</strong></td>
@@ -703,10 +735,14 @@ function renderAtendimentos(){
 
 function renderCancelamentos(){
   const total=cancelsList.reduce((a,e)=>a+e.total,0);
-  document.getElementById('cancelTotal').textContent=`R$ ${total}`;
-  document.getElementById('cancelCountLabel').textContent=`${cancelsList.length} cancelamento${cancelsList.length!==1?'s':''}`;
-  document.getElementById('cancelSlots').textContent=cancelsList.length;
-  document.getElementById('cancelBody').innerHTML=cancelsList.length?cancelsList.map(e=>`<tr>
+  const cancelTotal = document.getElementById('cancelTotal');
+  if(cancelTotal) cancelTotal.textContent=`R$ ${total}`;
+  const cancelCountLabel = document.getElementById('cancelCountLabel');
+  if(cancelCountLabel) cancelCountLabel.textContent=`${cancelsList.length} cancelamento${cancelsList.length!==1?'s':''}`;
+  const cancelSlots = document.getElementById('cancelSlots');
+  if(cancelSlots) cancelSlots.textContent=cancelsList.length;
+  const cancelBody = document.getElementById('cancelBody');
+  if(cancelBody) cancelBody.innerHTML=cancelsList.length?cancelsList.map(e=>`<tr>
     <td style="font-size:.78rem;color:var(--gray5)">${e.date?isoLabel(e.date):''}</td>
     <td><strong style="font-family:'Cormorant Garamond',serif;font-size:1rem">${e.slot}</strong></td>
     <td>${e.name}</td><td style="color:var(--gray4);font-size:.75rem">${e.services.join(', ')}</td>
@@ -722,10 +758,16 @@ function openConfirm(key){
   pendingCancelSlot=key;
   const e=bookings[key];
   if(!e){showToast('Não encontrado.');return;}
-  document.getElementById('confirmText').textContent=`Cancelar ${e.name} em ${e.date?isoLabel(e.date):''} às ${e.slot}? (R$ ${e.total})`;
-  document.getElementById('confirmOverlay').classList.add('open');
+  const el = document.getElementById('confirmText');
+  if(el) el.textContent=`Cancelar ${e.name} em ${e.date?isoLabel(e.date):''} às ${e.slot}? (R$ ${e.total})`;
+  const overlay = document.getElementById('confirmOverlay');
+  if(overlay) overlay.classList.add('open');
 }
-function closeConfirm(){document.getElementById('confirmOverlay').classList.remove('open');pendingCancelSlot=null;}
+function closeConfirm(){
+  const overlay = document.getElementById('confirmOverlay');
+  if(overlay) overlay.classList.remove('open');
+  pendingCancelSlot=null;
+}
 async function executeCancel(){
   if(!pendingCancelSlot)return;
   const e=bookings[pendingCancelSlot];
@@ -743,12 +785,24 @@ async function executeCancel(){
 //  TOAST
 // ══════════════════════════════════════
 let toastTimer;
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3200);}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  if(!t) return;
+  t.textContent=msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3200);
+}
 
 // ══════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════
-initCal();
+// Inicia a aplicação assim que o DOM estiver pronto
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 </script>
 </body>
 </html>
