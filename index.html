@@ -8,6 +8,39 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Syne:wght@400;500;700&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
+  
+  <!-- Scripts do Firebase (v9 Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+  <script>
+    // Inicialização do Firebase com base no seu config.js
+    if (window.PB_CONFIG && window.PB_CONFIG.firebase) {
+      const firebaseConfig = window.PB_CONFIG.firebase;
+      firebase.initializeApp(firebaseConfig);
+
+      // Definindo as funções globais que o index.html espera
+      window._db = firebase.firestore();
+      window._auth = firebase.auth();
+      
+      window._signIn = (email, pass) => firebase.auth().signInWithEmailAndPassword(email, pass);
+      window._signOut = () => firebase.auth().signOut();
+      window._onAuth = (cb) => firebase.auth().onAuthStateChanged(cb);
+      
+      window._col = (db, name) => db.collection(name);
+      window._doc = (db, name, id) => db.collection(name).doc(id);
+      window._onSnapshot = (ref, cb, err) => ref.onSnapshot(cb, err);
+      window._setDoc = (ref, data) => ref.set(data);
+      window._deleteDoc = (ref) => ref.delete();
+
+      // Avisa o app que o Firebase está pronto
+      window.dispatchEvent(new Event('fbready'));
+    } else {
+      console.error("Configuração do Firebase não encontrada no PB_CONFIG.");
+    }
+  </script>
+
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
